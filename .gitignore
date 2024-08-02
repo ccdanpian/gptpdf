@@ -1,4 +1,5 @@
 test/.env
+api/.env
 gp/*
 *.pyc
 dist/*
