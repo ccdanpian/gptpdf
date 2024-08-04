@@ -1,8 +1,11 @@
 test/.env
 api/.env
+api/outputs/*
+api/uploads/*
 gp/*
 *.pyc
 dist/*
 .idea
 venv
 test_output
+test/*
