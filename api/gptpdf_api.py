@@ -26,6 +26,10 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 logger.info(f"Upload folder: {UPLOAD_FOLDER}")
 logger.info(f"Output folder: {OUTPUT_FOLDER}")
 
+@app.route('/')
+def home():
+    return render_template('./index.html')
+
 @app.route('/parse_pdf', methods=['POST'])
 def api_parse_pdf():
     logger.info("Received request to parse PDF")
