@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT PDF 转换器</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --hover-color: #45a049;
+            --background-color: #f0f4f8;
+            --text-color: #333;
+            --border-color: #ddd;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 98%;
+            margin: 0 auto;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 5px 0;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        button, .file-upload {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover, .file-upload:hover {
+            background-color: var(--hover-color);
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #fileInput {
+            display: none;
+        }
+        .file-upload {
+            background-color: #f1f1f1;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+        #mdViewer {
+            flex: 1;
+            width: 100%;
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            box-sizing: border-box;
+            overflow-y: auto;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        #mdViewer img {
+            max-width: 100%;
+            width: auto !important;
+            height: auto !important;
+        }
+        #status {
+            margin-top: 1rem;
+            font-style: italic;
+            color: #666;
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            button, .file-upload {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GPT PDF 转换器</h1>
+    </header>
+    
+    <div class="container">
+        <div class="controls">
+            <label for="fileInput" class="file-upload">
+                选择PDF文件
+                <input type="file" id="fileInput" accept=".pdf" onchange="uploadFile()">
+            </label>
+            <button id="parseButton" onclick="parsePDF()" disabled>开始识别转换</button>
+            <button id="saveButton" onclick="saveResults()" disabled>保存识别结果</button>
+        </div>
+
+        <div id="status"></div>
+        <div id="mdViewer"></div>
+    </div>
+
+    <script>
+    let fileId = null;
+    let parsedContent = null;
+    let images = [];
+
+    function setStatus(message) {
+        document.getElementById('status').textContent = message;
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (file) {
+            setStatus('正在上传文件...');
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload_pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.fileId) {
+                    fileId = data.fileId;
+                    setStatus('文件上传成功');
+                    document.getElementById('parseButton').disabled = false;
+                } else {
+                    throw new Error('文件上传失败');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                setStatus('文件上传失败: ' + error.message);
+            }
+        }
+    }
+
+    async function parsePDF() {
+        if (!fileId) {
+            setStatus('请先上传PDF文件');
+            return;
+        }
+
+        setStatus('正在解析PDF...');
+        try {
+            const response = await fetch('/parse_pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ fileId: fileId })
+            });
+            const data = await response.json();
+            if (data.content) {
+                parsedContent = data.content;
+                document.getElementById('mdViewer').innerHTML = marked.parse(parsedContent);
+                
+                // 修改图片样式
+                const imgElements = document.getElementById('mdViewer').getElementsByTagName('img');
+                Array.from(imgElements).forEach(img => {
+                    img.style.width = 'auto';
+                    img.style.height = 'auto';
+                    img.style.maxWidth = '100%';
+                });
+
+                setStatus('PDF解析完成');
+                document.getElementById('saveButton').disabled = false;
+            } else {
+                throw new Error('PDF解析失败');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            setStatus('PDF解析失败: ' + error.message);
+        }
+    }
+
+    async function saveResults() {
+    if (!parsedContent) {
+        setStatus('没有可保存的内容');
+        return;
+    }
+
+    const dirHandle = await window.showDirectoryPicker().catch(err => {
+        setStatus('用户取消了文件夹选择');
+        return null;
+    });
+
+    if (!dirHandle) return;
+
+    try {
+        // 创建 images 子文件夹
+        const imagesDir = await dirHandle.getDirectoryHandle('images', { create: true });
+
+        // 更新 Markdown 内容中的图片路径
+        let updatedContent = parsedContent;
+        const imgRegex = /!\[.*?\]\((\.\/images\/.*?\/.*?\.png)\)/g;
+        const imgMatches = [...updatedContent.matchAll(imgRegex)];
+
+        for (const match of imgMatches) {
+            const oldPath = match[1]; // 例如: ./images/b4fabf88b67658fd95395f0cb92dbdc4/0_2.png
+            const imgName = oldPath.split('/').pop(); // 获取文件名: 0_2.png
+            const newPath = `./images/${imgName}`;
+            
+            updatedContent = updatedContent.replace(oldPath, newPath);
+
+            // 保存图片
+            const response = await fetch(oldPath);
+            const blob = await response.blob();
+            
+            const imgFile = await imagesDir.getFileHandle(imgName, { create: true });
+            const imgWritable = await imgFile.createWritable();
+            await imgWritable.write(blob);
+            await imgWritable.close();
+        }
+
+        // 保存更新后的 Markdown 文件
+        const mdFile = await dirHandle.getFileHandle('content.md', { create: true });
+        const writable = await mdFile.createWritable();
+        await writable.write(updatedContent);
+        await writable.close();
+
+        setStatus('更新后的内容和图片已保存到选定文件夹，图片位于 images 子文件夹中');
+    } catch (error) {
+        console.error('Error saving files:', error);
+        setStatus('保存文件时发生错误: ' + error.message);
+    }
+}
+
+    // 初始化Markdown查看器
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('mdViewer').innerHTML = marked.parse('# PDF内容将显示在这里');
+    });
+
+    // 为按钮添加事件监听器
+    document.addEventListener('DOMContentLoaded', function() {
+        // document.getElementById('fileInput').addEventListener('change', uploadFile);
+        // document.getElementById('parseButton').addEventListener('click', parsePDF);
+        // document.getElementById('saveButton').addEventListener('click', saveResults);
+    });
+    </script>
+</body>
+</html>
