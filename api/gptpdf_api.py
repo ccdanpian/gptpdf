@@ -94,4 +94,4 @@ def api_parse_pdf():
 
 if __name__ == '__main__':
     logger.info("Starting Flask application")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=21138)
